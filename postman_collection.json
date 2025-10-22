@@ -1,0 +1,227 @@
+{
+  "info": {
+    "name": "H-CARF Scanner API",
+    "description": "Collection for testing H-CARF Security Scanner endpoints",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Generate CAPTCHA",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/captcha/generate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "captcha", "generate"]
+        },
+        "description": "Generate a new CAPTCHA challenge"
+      },
+      "response": [
+        {
+          "name": "Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/captcha/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "captcha", "generate"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"abc123\",\n    \"image\": \"base64_encoded_svg_image\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Validate CAPTCHA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{captcha_id}}\",\n  \"answer\": \"ABC123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/captcha/validate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "captcha", "validate"]
+        },
+        "description": "Validate CAPTCHA answer"
+      },
+      "response": [
+        {
+          "name": "Valid",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"abc123\",\n  \"answer\": \"ABC123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/captcha/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "captcha", "validate"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\n  \"success\": true,\n  \"valid\": true\n}"
+        },
+        {
+          "name": "Invalid",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"abc123\",\n  \"answer\": \"WRONG\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/captcha/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "captcha", "validate"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\n  \"success\": true,\n  \"valid\": false\n}"
+        }
+      ]
+    },
+    {
+      "name": "Perform Security Scan (Demo Mode)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"domain\": \"example.com\",\n  \"apiKeys\": {\n    \"github\": \"\",\n    \"google\": \"\",\n    \"googleCx\": \"\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/scan",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "scan"]
+        },
+        "description": "Perform security scan in demo mode (no API keys)"
+      },
+      "response": [
+        {
+          "name": "Demo Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"domain\": \"example.com\",\n  \"apiKeys\": {\n    \"github\": \"\",\n    \"google\": \"\",\n    \"googleCx\": \"\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scan",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "scan"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"results\": [\n      {\n        \"source\": \"Demo - GitHub\",\n        \"url\": \"https://github.com/example/repo\",\n        \"snippet\": \"API key found in config\",\n        \"severity\": \"High\",\n        \"recommendation\": \"Remove API keys from source code\"\n      }\n    ],\n    \"metadata\": {\n      \"domain\": \"example.com\",\n      \"timestamp\": \"2024-01-01T00:00:00.000Z\",\n      \"scanDuration\": 2000,\n      \"queries\": 4,\n      \"success\": 4,\n      \"failed\": 0\n    }\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Perform Security Scan (With API Keys)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"domain\": \"example.com\",\n  \"apiKeys\": {\n    \"github\": \"ghp_your_github_token\",\n    \"google\": \"your_google_api_key\",\n    \"googleCx\": \"your_custom_search_engine_id\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/scan",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "scan"]
+        },
+        "description": "Perform security scan with real API keys"
+      }
+    },
+    {
+      "name": "Export Results (JSON)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"format\": \"json\",\n  \"results\": [\n    {\n      \"source\": \"GitHub\",\n      \"url\": \"https://github.com/example\",\n      \"snippet\": \"API key found\",\n      \"severity\": \"High\",\n      \"recommendation\": \"Remove from code\"\n    }\n  ],\n  \"metadata\": {\n    \"domain\": \"example.com\",\n    \"timestamp\": \"2024-01-01T00:00:00.000Z\",\n    \"scanDuration\": 1000,\n    \"queries\": 1,\n    \"success\": 1,\n    \"failed\": 0\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/export",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "export"]
+        },
+        "description": "Export scan results in JSON format"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "description": "Base URL for the H-CARF Scanner API"
+    },
+    {
+      "key": "captcha_id",
+      "value": "",
+      "description": "CAPTCHA ID from generate endpoint"
+    }
+  ]
+}
