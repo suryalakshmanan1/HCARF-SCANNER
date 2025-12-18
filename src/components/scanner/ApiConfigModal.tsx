@@ -41,65 +41,109 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
     aiApiKey: false,
   });
   const [validatingKeys, setValidatingKeys] = useState(false);
-  const [keyValidationStatus, setKeyValidationStatus] = useState<{[key: string]: boolean}>({});
+  const [keyValidationStatus, setKeyValidationStatus] = useState<{[key: string]: boolean | string}>({});
+  const [validationMessages, setValidationMessages] = useState<{[key: string]: string}>({});
 
   const validateApiKeys = async () => {
     setValidatingKeys(true);
-    const validationResults: {[key: string]: boolean} = {};
+    const validationResults: {[key: string]: boolean | string} = {};
+    const messages: {[key: string]: string} = {};
     
     try {
       // Test GitHub API key
-      if (keys.github) {
+      if (keys.github && keys.github.trim().length > 0) {
         try {
           const githubResponse = await fetch('https://api.github.com/user', {
-            headers: { 'Authorization': `token ${keys.github}` }
+            headers: { 
+              'Authorization': `token ${keys.github}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
           });
-          validationResults.github = githubResponse.ok;
-        } catch {
+          if (githubResponse.ok) {
+            validationResults.github = true;
+            messages.github = '✓ GitHub API Key is VALID';
+          } else if (githubResponse.status === 401) {
+            validationResults.github = false;
+            messages.github = '✗ Invalid GitHub API key (401 Unauthorized)';
+          } else {
+            validationResults.github = false;
+            messages.github = `✗ GitHub API error: ${githubResponse.status}`;
+          }
+        } catch (error) {
           validationResults.github = false;
+          messages.github = '✗ Cannot reach GitHub API (Network error)';
         }
+      } else if (keys.github) {
+        validationResults.github = 'empty';
+        messages.github = 'ⓘ GitHub API key is empty';
       }
 
       // Test Google API key with a simple search
-      if (keys.google && keys.googleCx) {
+      if (keys.google && keys.google.trim().length > 0 && keys.googleCx && keys.googleCx.trim().length > 0) {
         try {
           const googleResponse = await fetch(
             `https://www.googleapis.com/customsearch/v1?key=${keys.google}&cx=${keys.googleCx}&q=test&num=1`
           );
-          validationResults.google = googleResponse.ok;
-        } catch {
+          if (googleResponse.ok) {
+            validationResults.google = true;
+            messages.google = '✓ Google Custom Search API is VALID';
+          } else if (googleResponse.status === 403) {
+            validationResults.google = false;
+            messages.google = '✗ Invalid Google API key or insufficient quota (403)';
+          } else {
+            validationResults.google = false;
+            messages.google = `✗ Google API error: ${googleResponse.status}`;
+          }
+        } catch (error) {
           validationResults.google = false;
+          messages.google = '✗ Cannot reach Google API (Network error)';
         }
+      } else if (keys.google || keys.googleCx) {
+        validationResults.google = 'empty';
+        messages.google = 'ⓘ Google API key or Custom Search Engine ID is empty';
       }
 
-      // Test AI API key (basic validation)
-      if (keys.aiApiKey) {
+      // Test AI API key
+      if (keys.aiApiKey && keys.aiApiKey.trim().length > 0) {
         try {
-          // Basic key format validation
-          validationResults.aiApiKey = keys.aiApiKey.length > 10;
+          // Check format and length
+          if (keys.aiApiKey.length > 10) {
+            validationResults.aiApiKey = true;
+            messages.aiApiKey = '✓ AI API Key format is valid';
+          } else {
+            validationResults.aiApiKey = false;
+            messages.aiApiKey = '✗ AI API Key is too short';
+          }
         } catch {
           validationResults.aiApiKey = false;
+          messages.aiApiKey = '✗ Invalid AI API Key format';
         }
+      } else if (keys.aiApiKey) {
+        validationResults.aiApiKey = 'empty';
+        messages.aiApiKey = 'ⓘ AI API key is empty (optional)';
       }
 
       setKeyValidationStatus(validationResults);
+      setValidationMessages(messages);
 
-      const allValid = Object.values(validationResults).every(Boolean);
-      if (allValid) {
+      const validKeys = Object.entries(validationResults).filter(([_, v]) => v === true).length;
+      const totalChecked = Object.keys(validationResults).length;
+
+      if (validKeys > 0) {
         toast({
           title: "API Keys Validated",
-          description: "All provided API keys are working correctly.",
+          description: `${validKeys}/${totalChecked} API keys are valid and ready to use.`,
         });
       } else {
         toast({
-          title: "Validation Complete",
-          description: "Some API keys may need attention. Check the status indicators.",
-          variant: "default"
+          title: "Validation Required",
+          description: "Please add and validate at least one API key (GitHub or Google) to enable live scanning.",
+          variant: "destructive"
         });
       }
     } catch (error) {
       toast({
-        title: "API Key Validation Failed",
+        title: "Validation Error",
         description: error instanceof Error ? error.message : "Validation encountered an error.",
         variant: "destructive"
       });
@@ -141,6 +185,35 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Validation Status Summary */}
+          {Object.keys(keyValidationStatus).length > 0 && (
+            <Card className={`border-2 ${
+              Object.values(keyValidationStatus).some(v => v === true) 
+                ? 'border-green-500/30 bg-green-50/5' 
+                : 'border-yellow-500/30 bg-yellow-50/5'
+            }`}>
+              <CardContent className="pt-6">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">API Key Validation Status</h3>
+                  {Object.entries(validationMessages).map(([key, message]) => (
+                    <div key={key} className="flex items-center space-x-2 text-sm">
+                      <div className={`w-2 h-2 rounded-full ${
+                        keyValidationStatus[key] === true ? 'bg-green-500' :
+                        keyValidationStatus[key] === false ? 'bg-red-500' : 'bg-gray-400'
+                      }`} />
+                      <span className={
+                        keyValidationStatus[key] === true ? 'text-green-700' :
+                        keyValidationStatus[key] === false ? 'text-red-700' : 'text-gray-700'
+                      }>
+                        {message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* GitHub API */}
           <Card>
             <CardHeader>
@@ -179,14 +252,19 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                   >
                     {showKeys.github ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
-                  <div className={`w-3 h-3 rounded-full ${
-                    keyValidationStatus.github === undefined ? 'bg-gray-500' :
-                    keyValidationStatus.github ? 'bg-green-500' : 'bg-red-500'
-                  }`} title={
-                    keyValidationStatus.github === undefined ? 'Not validated' :
-                    keyValidationStatus.github ? 'Key is valid' : 'Key validation failed'
-                  } />
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    keyValidationStatus.github === undefined || keyValidationStatus.github === 'empty' ? 'bg-gray-400' :
+                    keyValidationStatus.github === true ? 'bg-green-500' : 'bg-red-500'
+                  }`} title={validationMessages.github} />
                 </div>
+                {validationMessages.github && (
+                  <p className={`text-sm ${
+                    keyValidationStatus.github === true ? 'text-green-600' :
+                    keyValidationStatus.github === false ? 'text-red-600' : 'text-gray-600'
+                  }`}>
+                    {validationMessages.github}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground">
                   Generate at: GitHub Settings → Developer settings → Personal access tokens
                 </p>
@@ -232,14 +310,19 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                   >
                     {showKeys.google ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
-                  <div className={`w-3 h-3 rounded-full ${
-                    keyValidationStatus.google === undefined ? 'bg-gray-500' :
-                    keyValidationStatus.google ? 'bg-green-500' : 'bg-red-500'
-                  }`} title={
-                    keyValidationStatus.google === undefined ? 'Not validated' :
-                    keyValidationStatus.google ? 'Key is valid' : 'Key validation failed'
-                  } />
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    keyValidationStatus.google === undefined || keyValidationStatus.google === 'empty' ? 'bg-gray-400' :
+                    keyValidationStatus.google === true ? 'bg-green-500' : 'bg-red-500'
+                  }`} title={validationMessages.google} />
                 </div>
+                {validationMessages.google && (
+                  <p className={`text-sm ${
+                    keyValidationStatus.google === true ? 'text-green-600' :
+                    keyValidationStatus.google === false ? 'text-red-600' : 'text-gray-600'
+                  }`}>
+                    {validationMessages.google}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="google-cx">Custom Search Engine ID</Label>
@@ -305,14 +388,19 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                   >
                     {showKeys.aiApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
-                  <div className={`w-3 h-3 rounded-full ${
-                    keyValidationStatus.aiApiKey === undefined ? 'bg-gray-500' :
-                    keyValidationStatus.aiApiKey ? 'bg-green-500' : 'bg-red-500'
-                  }`} title={
-                    keyValidationStatus.aiApiKey === undefined ? 'Not validated' :
-                    keyValidationStatus.aiApiKey ? 'Key is valid' : 'Key validation failed'
-                  } />
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    keyValidationStatus.aiApiKey === undefined || keyValidationStatus.aiApiKey === 'empty' ? 'bg-gray-400' :
+                    keyValidationStatus.aiApiKey === true ? 'bg-green-500' : 'bg-red-500'
+                  }`} title={validationMessages.aiApiKey} />
                 </div>
+                {validationMessages.aiApiKey && (
+                  <p className={`text-sm ${
+                    keyValidationStatus.aiApiKey === true ? 'text-green-600' :
+                    keyValidationStatus.aiApiKey === false ? 'text-red-600' : 'text-gray-600'
+                  }`}>
+                    {validationMessages.aiApiKey}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground">
                   Optional: Enables AI Security Assistant and enhanced analysis
                 </p>

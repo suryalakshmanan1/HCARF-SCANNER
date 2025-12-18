@@ -28,14 +28,8 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
   className,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: '🛡️ Welcome to HACRF Security Assistant! I\'m your AI-powered cybersecurity expert ready to help you analyze scan results, provide remediation advice, and answer security questions. How can I help secure your domain today?',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -45,7 +39,26 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typewriterRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize AI service with user's API key
+  // Initialize AI service with user's API key - CHECK EVERY TIME
+  useEffect(() => {
+    // Initialize welcome message based on scan results
+    if (!hasInitialized && (scanResults.length > 0 || scanMetadata)) {
+      const domain = scanMetadata?.domain || 'your domain';
+      const findingsCount = scanResults.length;
+      
+      const welcomeMsg = {
+        id: '1',
+        role: 'assistant' as const,
+        content: `🛡️ Welcome to HACRF Security Assistant!\n\nI've analyzed **${domain}** and found **${findingsCount} security finding${findingsCount !== 1 ? 's' : ''}**.\n\nI'm here to help you:\n• Understand each finding\n• Get step-by-step remediation advice\n• Answer security questions\n• Provide best practices\n\nWhat would you like to know?`,
+        timestamp: new Date(),
+      };
+      
+      setMessages([welcomeMsg]);
+      setHasInitialized(true);
+    }
+  }, [scanMetadata?.domain, scanResults.length, hasInitialized]);
+
+  // Initialize AI service with user's API key - CHECK EVERY TIME
   useEffect(() => {
     const initAiService = async () => {
       const apiKeys = JSON.parse(sessionStorage.getItem('apiKeys') || '{}');
@@ -57,13 +70,16 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
             setAiService(service);
             setApiKeyError(null);
             setIsApiKeyValid(true);
+            console.log('[Chat] AI API key validated successfully');
           } else {
             setApiKeyError('Invalid AI API key. Please check your OpenRouter API key in settings.');
             setIsApiKeyValid(false);
+            console.error('[Chat] AI API key validation failed');
           }
         } catch (error) {
           setApiKeyError('Failed to validate AI API key. Please check your configuration.');
           setIsApiKeyValid(false);
+          console.error('[Chat] API key check error:', error);
         }
       } else {
         setApiKeyError('AI API key not configured. Please add your OpenRouter API key in API Configuration.');
@@ -71,13 +87,105 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
       }
     };
 
+    // Check immediately when component loads or updates
     initAiService();
+    
+    // Also check periodically in case user adds key while chat is open
+    const interval = setInterval(initAiService, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  // Listen for "Ask AI" events from findings
+  useEffect(() => {
+    const handleAskAiEvent = async () => {
+      const pendingQuestion = sessionStorage.getItem('pendingAiQuestion');
+      if (pendingQuestion && aiService) {
+        setIsOpen(true); // Open the sidebar
+        
+        // Add user message
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: pendingQuestion,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
+        setIsLoading(true);
+
+        try {
+          // Add empty assistant message for typewriter effect
+          const assistantMessageId = (Date.now() + 1).toString();
+          setMessages(prev => [...prev, {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+          }]);
+
+          const response = await aiService.generateConversationalResponse(
+            pendingQuestion,
+            scanResults,
+            scanMetadata,
+            [userMessage].map(m => ({ role: m.role, content: m.content }))
+          );
+
+          // Use typewriter effect for response
+          let currentText = '';
+          let currentIndex = 0;
+          setIsTyping(true);
+
+          const typeNextCharacter = () => {
+            if (currentIndex < response.length) {
+              currentText += response[currentIndex];
+              setMessages(prev => {
+                const newMessages = [...prev];
+                if (newMessages[newMessages.length - 1]?.role === 'assistant') {
+                  newMessages[newMessages.length - 1] = {
+                    ...newMessages[newMessages.length - 1],
+                    content: currentText
+                  };
+                }
+                return newMessages;
+              });
+              currentIndex++;
+              typewriterRef.current = setTimeout(typeNextCharacter, 20);
+            } else {
+              setIsTyping(false);
+              setIsLoading(false);
+            }
+          };
+
+          typeNextCharacter();
+        } catch (error) {
+          console.error('AI response error:', error);
+          setMessages(prev => {
+            const newMessages = [...prev];
+            if (newMessages[newMessages.length - 1]?.role === 'assistant') {
+              newMessages[newMessages.length - 1] = {
+                ...newMessages[newMessages.length - 1],
+                content: '⚠️ Unable to generate response. Please check your API key configuration and try again.'
+              };
+            }
+            return newMessages;
+          });
+          setIsLoading(false);
+        }
+        
+        // Clear the pending question
+        sessionStorage.removeItem('pendingAiQuestion');
+      }
+    };
+
+    window.addEventListener('askAiAboutFinding', handleAskAiEvent);
+    return () => window.removeEventListener('askAiAboutFinding', handleAskAiEvent);
+  }, [aiService, scanResults, scanMetadata]);
 
   const typewriterEffect = (text: string, callback: () => void) => {
     setIsTyping(true);
@@ -204,7 +312,7 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
           className
         )}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="p-4 border-b border-primary/20 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10">
             <div className="flex items-center justify-between mb-2">
@@ -250,34 +358,34 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
           )}
 
           {/* Messages */}
-          <div className="flex-1 flex flex-col">
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1 w-full pr-4">
+              <div className="space-y-4 p-4 pr-0">
                 {messages.map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}
                   >
-                    <Card className={`max-w-[85%] backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] ${
+                    <Card className={`max-w-[85%] transition-all duration-300 ${
                       message.role === 'user' 
-                        ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border-cyan-500/30 text-foreground shadow-lg shadow-cyan-500/10' 
-                        : 'bg-gradient-to-r from-background/80 to-muted/60 border-purple-500/20 shadow-lg shadow-purple-500/5'
+                        ? 'bg-slate-700 border-slate-600/50 text-foreground' 
+                        : 'bg-slate-800 border-slate-600/50'
                     }`}>
                       <CardContent className="p-3">
                         <div className="flex items-start space-x-2">
                           {message.role === 'assistant' && (
-                            <div className="h-5 w-5 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <div className="h-5 w-5 bg-slate-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                               <Shield className="h-2.5 w-2.5 text-white" />
                             </div>
                           )}
                           {message.role === 'user' && (
-                            <div className="h-5 w-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <div className="h-5 w-5 bg-slate-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                               <User className="h-2.5 w-2.5 text-white" />
                             </div>
                           )}
                           <div className="flex-1 space-y-1">
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                            <p className="text-xs opacity-60">
+                            <p className="text-xs opacity-50">
                               {message.timestamp.toLocaleTimeString()}
                             </p>
                           </div>
@@ -288,18 +396,18 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
                 ))}
                 {(isLoading || isTyping) && (
                   <div className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
-                    <Card className="bg-gradient-to-r from-background/80 to-muted/60 border-purple-500/20 shadow-lg shadow-purple-500/5">
+                    <Card className="bg-slate-800 border-slate-600/50">
                       <CardContent className="p-3">
                         <div className="flex items-center space-x-2">
-                          <div className="h-5 w-5 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center animate-pulse">
+                          <div className="h-5 w-5 bg-slate-600 rounded-full flex items-center justify-center animate-pulse">
                             <Shield className="h-2.5 w-2.5 text-white" />
                           </div>
                           <div className="flex space-x-1">
-                            <div className="w-1.5 h-1.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full animate-bounce" />
-                            <div className="w-1.5 h-1.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                            <div className="w-1.5 h-1.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                            <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
+                            <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                            <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                           </div>
-                          <span className="text-xs text-muted-foreground">Analyzing...</span>
+                          <span className="text-xs text-slate-400">Analyzing...</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -309,48 +417,40 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
               </div>
             </ScrollArea>
 
-            {/* Quick Questions */}
-            {scanResults.length > 0 && (
-              <div className="p-3 border-t border-primary/10 bg-gradient-to-r from-background/50 to-muted/30">
-                <p className="text-xs font-medium text-foreground flex items-center space-x-2 mb-2">
-                  <Sparkles className="h-3 w-3 text-cyan-500" />
-                  <span>Quick Questions:</span>
-                </p>
-                <div className="grid grid-cols-1 gap-1">
-                  {quickQuestions.slice(0, 3).map((question, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setInput(question)}
-                      className="text-xs h-auto py-1.5 px-2 hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 justify-start"
-                      disabled={isLoading || isTyping || !isApiKeyValid}
-                    >
-                      {question}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Input */}
-            <div className="p-3 border-t border-primary/10 bg-gradient-to-r from-background/60 to-muted/40">
+            <div className="p-3 border-t border-border/30 bg-background/50 space-y-2">
+              {apiKeyError && !isApiKeyValid && (
+                <Alert className="py-2 border-amber-500/50 bg-amber-500/10 rounded-md">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-xs text-amber-600 ml-2">
+                    {apiKeyError}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {isApiKeyValid && (
+                <div className="py-1.5 px-2 bg-green-500/10 border border-green-500/30 rounded-md flex items-center space-x-2">
+                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs text-green-600">AI API key configured ✓</span>
+                </div>
+              )}
               <div className="flex space-x-2">
-                <Input
-                  placeholder={isApiKeyValid ? "Ask about your security findings..." : "Configure AI API key to start..."}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !isLoading && !isTyping && isApiKeyValid && handleSendMessage()}
-                  disabled={isLoading || isTyping || !isApiKeyValid}
-                  className="flex-1 h-8 text-sm bg-background/80 border-primary/20 focus:border-primary/40 focus:ring-primary/20"
-                />
+                <div className="flex-1 relative">
+                  <Input
+                    placeholder={isApiKeyValid ? "Ask anything about this finding or your project..." : "Configure AI API key to start..."}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !isLoading && !isTyping && isApiKeyValid && handleSendMessage()}
+                    disabled={isLoading || isTyping || !isApiKeyValid}
+                    className="h-9 text-sm bg-slate-700/50 border border-slate-600/50 focus:border-slate-500 focus:ring-slate-500/20 placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  />
+                </div>
                 <Button
                   onClick={handleSendMessage}
                   disabled={!input.trim() || isLoading || isTyping || !isApiKeyValid}
                   size="sm"
-                  className="h-8 w-8 p-0 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white transition-all duration-200"
+                  className="h-9 px-3 bg-slate-700 hover:bg-slate-600 text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-600/50"
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>

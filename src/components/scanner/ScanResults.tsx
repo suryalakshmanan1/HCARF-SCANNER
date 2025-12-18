@@ -21,6 +21,8 @@ export const ScanResults: React.FC<ScanResultsProps> = ({ results, metadata, onA
         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
       case 'medium':
         return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      case 'informational':
+        return <CheckCircle className="h-4 w-4 text-blue-500" />;
       default:
         return <CheckCircle className="h-4 w-4 text-green-500" />;
     }
@@ -34,6 +36,8 @@ export const ScanResults: React.FC<ScanResultsProps> = ({ results, metadata, onA
         return 'severity-high';
       case 'medium':
         return 'severity-medium';
+      case 'informational':
+        return 'severity-info';
       default:
         return 'severity-low';
     }
@@ -97,6 +101,46 @@ export const ScanResults: React.FC<ScanResultsProps> = ({ results, metadata, onA
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Mode Disclaimer for DEMO Mode */}
+      {metadata?.scanMode === 'DEMO' && metadata?.modeDisclaimer && (
+        <Card className="border-2 border-yellow-500/30 bg-yellow-50/5">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="font-semibold text-yellow-700">⚠️ Demo Mode Active</p>
+                  <p className="text-sm text-yellow-700 whitespace-pre-wrap">{metadata.modeDisclaimer}</p>
+                </div>
+              </div>
+              {metadata.invalidKeys && metadata.invalidKeys.length > 0 && (
+                <div className="mt-4 p-3 bg-yellow-500/10 rounded border border-yellow-500/20">
+                  <p className="text-xs font-medium text-yellow-700 mb-2">To enable LIVE scanning, configure:</p>
+                  <ul className="text-xs text-yellow-700 space-y-1">
+                    {metadata.invalidKeys.map((key) => (
+                      <li key={key}>• {key}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Mode Badge for LIVE Mode */}
+      {metadata?.scanMode === 'LIVE' && (
+        <div className="flex items-center justify-between bg-gradient-to-r from-green-50/5 to-cyan-50/5 border border-green-500/20 rounded-lg p-3">
+          <div className="flex items-center space-x-2">
+            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-green-700">🟢 LIVE SCAN MODE</span>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Using {metadata.validKeys?.join(', ') || 'configured API'} keys
+          </span>
+        </div>
       )}
 
       {/* Results List */}
@@ -184,15 +228,13 @@ export const ScanResults: React.FC<ScanResultsProps> = ({ results, metadata, onA
 
                     {/* Ask AI Assistant Button */}
                     {onAskAi && (
-                      <div className="pt-2 border-t border-border/50">
+                      <div className="pt-3 border-t border-border/30">
                         <Button
-                          variant="outline"
-                          size="sm"
                           onClick={() => onAskAi(result)}
-                          className="w-full bg-gradient-to-r from-purple-500/10 to-cyan-500/10 hover:from-purple-500/20 hover:to-cyan-500/20 border-purple-500/30 hover:border-purple-500/50 transition-all duration-200"
+                          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium transition-all duration-200 h-9 border border-slate-600/50"
                         >
                           <MessageSquare className="h-4 w-4 mr-2" />
-                          Ask AI Assistant About This Finding
+                          Ask AI About This
                         </Button>
                       </div>
                     )}

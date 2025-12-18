@@ -32,14 +32,21 @@ class OpenRouterService {
       const response = await this.makeRequest({
         model: this.model,
         messages: [
-          { role: 'user', content: 'Hello' }
+          { role: 'user', content: 'Hi' }
         ],
-        max_tokens: 10
+        max_tokens: 5
       });
-      return response.choices && response.choices.length > 0;
-    } catch (error) {
-      console.error('OpenRouter API key validation failed:', error);
-      return false;
+      const isValid = response.choices && response.choices.length > 0;
+      console.log('[OpenRouter] API key validation result:', isValid);
+      return isValid;
+    } catch (error: any) {
+      console.error('[OpenRouter] API key validation failed:', error?.message || error);
+      // If 401/403, key is invalid. Other errors might be temporary
+      if (error?.message?.includes('401') || error?.message?.includes('403')) {
+        return false;
+      }
+      // Give benefit of doubt for other errors
+      return true;
     }
   }
 
@@ -255,22 +262,32 @@ ${scanResults.slice(0, 3).map(r => `- ${r.severity} finding in ${r.source}: ${r.
   }
 
   private async makeRequest(payload: OpenRouterRequest): Promise<OpenRouterResponse> {
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'HACRF Security Scanner'
-      },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'HACRF Security Scanner'
+        },
+        body: JSON.stringify(payload)
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[OpenRouter] API error ${response.status}:`, errorText);
+        const error = new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+        (error as any).status = response.status;
+        throw error;
+      }
+
+      const data = await response.json();
+      return data as OpenRouterResponse;
+    } catch (error) {
+      console.error('[OpenRouter] Request failed:', error);
+      throw error;
     }
-
-    return await response.json();
   }
 }
 

@@ -11,7 +11,7 @@ import { ScanResults } from '@/components/scanner/ScanResults';
 import { ExportPanel } from '@/components/scanner/ExportPanel';
 import { AiAssistant } from '@/components/scanner/AiAssistant';
 import { FloatingAiButton } from '@/components/scanner/FloatingAiButton';
-import { AiChatSidebar } from '@/components/scanner/AiChatSidebar';
+import { AiAssistantSidebar } from '@/components/scanner/AiAssistantSidebar';
 import { SecurityGuidelinesModal } from '@/components/scanner/SecurityGuidelinesModal';
 import { SecurityTipsCard } from '@/components/scanner/SecurityTipsCard';
 import { UserAgreementModal } from '@/components/scanner/UserAgreementModal';
@@ -23,7 +23,7 @@ export interface ScanResult {
   source: string;
   url: string;
   snippet: string;
-  severity: 'Low' | 'Medium' | 'High' | 'Critical';
+  severity: 'Low' | 'Medium' | 'High' | 'Critical' | 'Informational';
   recommendation: string;
 }
 
@@ -36,6 +36,10 @@ export interface ScanMetadata {
   failed: number;
   aiEnhanced?: boolean;
   validatedFindings?: number;
+  scanMode?: 'LIVE' | 'DEMO';
+  modeDisclaimer?: string;
+  validKeys?: string[];
+  invalidKeys?: string[];
 }
 
 const Index = () => {
@@ -44,7 +48,6 @@ const Index = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [showApiConfig, setShowApiConfig] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
-  const [showAiChatSidebar, setShowAiChatSidebar] = useState(false);
   const [showSecurityGuidelines, setShowSecurityGuidelines] = useState(false);
   const [showUserAgreement, setShowUserAgreement] = useState(() => !localStorage.getItem('privacyAccepted'));
   
@@ -144,71 +147,50 @@ const Index = () => {
     try {
       const storedApiKeys = JSON.parse(sessionStorage.getItem('apiKeys') || '{}');
       
-      // Step 1: Initialization
-      updateScanStep('initialization', { status: 'active', progress: 0 });
-      setOverallProgress(5);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      updateScanStep('initialization', { status: 'completed', progress: 100 });
-      setOverallProgress(15);
-
-      // Step 2: GitHub Scanning
-      updateScanStep('github', { 
-        status: 'active', 
-        progress: 0,
-        details: 'Searching GitHub repositories for exposed secrets...'
-      });
-      setOverallProgress(25);
-      
-      // Simulate GitHub scanning progress
-      for (let i = 0; i <= 100; i += 20) {
-        updateScanStep('github', { progress: i });
-        setOverallProgress(25 + (i * 0.2));
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      updateScanStep('github', { status: 'completed', details: 'GitHub scan completed' });
-      setOverallProgress(45);
-
-      // Step 3: Google Scanning
-      updateScanStep('google', { 
-        status: 'active', 
-        progress: 0,
-        details: 'Performing Google dorking queries...'
-      });
-      
-      // Simulate Google scanning progress
-      for (let i = 0; i <= 100; i += 25) {
-        updateScanStep('google', { progress: i });
-        setOverallProgress(45 + (i * 0.25));
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-      updateScanStep('google', { status: 'completed', details: 'Google scan completed' });
-      setOverallProgress(70);
-
-      // Step 4: AI Analysis
-      if (storedApiKeys.aiApiKey) {
-        updateScanStep('ai-analysis', { 
-          status: 'active', 
-          progress: 0,
-          details: 'AI validating and prioritizing findings...'
+      // Progress callback for REAL scanner updates
+      const handleScanProgress = (phase: string, progress: number, message: string) => {
+        console.log(`[UI] Progress: ${phase} - ${progress}% - ${message}`);
+        
+        // Map scanner phases to UI steps
+        const phaseMap: { [key: string]: string } = {
+          'initialization': 'initialization',
+          'github': 'github',
+          'google': 'google',
+          'ai-analysis': 'ai-analysis',
+          'demo': 'demo'
+        };
+        
+        const uiPhase = phaseMap[phase] || phase;
+        
+        updateScanStep(uiPhase, { 
+          status: progress === 100 ? 'completed' : 'active',
+          progress: progress,
+          details: message
         });
         
-        for (let i = 0; i <= 100; i += 33) {
-          updateScanStep('ai-analysis', { progress: i });
-          setOverallProgress(70 + (i * 0.3));
-          await new Promise(resolve => setTimeout(resolve, 400));
-        }
-        updateScanStep('ai-analysis', { status: 'completed', details: 'AI analysis completed' });
-      } else {
-        updateScanStep('ai-analysis', { 
-          status: 'completed', 
-          details: 'Skipped (AI API key not configured)'
-        });
-      }
-      setOverallProgress(100);
+        // Calculate overall progress based on phase
+        const phaseWeights: { [key: string]: [number, number] } = {
+          'initialization': [0, 15],
+          'github': [15, 40],
+          'google': [40, 70],
+          'ai-analysis': [70, 95],
+          'demo': [15, 95]
+        };
+        
+        const [minProgress, maxProgress] = phaseWeights[phase] || [progress, progress];
+        const phaseOverallProgress = minProgress + ((maxProgress - minProgress) * progress) / 100;
+        setOverallProgress(phaseOverallProgress);
+      };
       
       // Use enhanced scanner if AI API key is available, otherwise fallback to standard scanner
       const scanFunction = storedApiKeys.aiApiKey ? performEnhancedScan : performScan;
-      const result = await scanFunction({ domain, apiKeys: storedApiKeys });
+      const result = await scanFunction({ 
+        domain, 
+        apiKeys: storedApiKeys,
+        onProgress: handleScanProgress 
+      });
+      
+      setOverallProgress(100);
       
       if (result.success && result.data) {
         setScanResults(result.data.results);
@@ -261,7 +243,7 @@ const Index = () => {
         onDecline={handleDeclineAgreement}
       />
 
-      <div className={`max-w-7xl mx-auto p-6 space-y-8 transition-all duration-300 ${showAiChatSidebar ? 'pr-96' : ''}`}>
+      <div className="max-w-7xl mx-auto p-6 space-y-8 transition-all duration-300">
         {/* Modern Header */}
         <div className="text-center space-y-6 py-8">
           <div className="flex items-center justify-center space-x-4">
@@ -426,36 +408,25 @@ const Index = () => {
             )}
 
             {/* Results Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
               <div className="lg:col-span-2">
                 <ScanResults 
                   results={scanResults} 
                   metadata={scanMetadata}
                   onAskAi={(finding) => {
-                    setShowAiChatSidebar(true);
-                    // We'll need to update the chat to handle this
-                    setTimeout(() => {
-                      const prompt = `Explain this security finding in detail:\n\nSeverity: ${finding.severity}\nSource: ${finding.source}\nSnippet: ${finding.snippet}\n\nProvide:\n1. What this finding means\n2. Potential security risks\n3. Step-by-step remediation\n4. Business impact`;
-                      // Store the prompt for the chat to pick up
-                      sessionStorage.setItem('pendingAiQuestion', prompt);
-                      window.dispatchEvent(new CustomEvent('askAiAboutFinding'));
-                    }, 100);
+                    // Open AI sidebar with finding question
+                    const prompt = `Explain this security finding in detail:\n\nSeverity: ${finding.severity}\nSource: ${finding.source}\nSnippet: ${finding.snippet}\n\nProvide:\n1. What this finding means\n2. Potential security risks\n3. Step-by-step remediation\n4. Business impact`;
+                    // Store the prompt for the chat to pick up
+                    sessionStorage.setItem('pendingAiQuestion', prompt);
+                    window.dispatchEvent(new CustomEvent('askAiAboutFinding'));
                   }}
                 />
               </div>
-              <div className="space-y-6">
+              <div className="space-y-2">
                 <ExportPanel results={scanResults} metadata={scanMetadata} />
               </div>
             </div>
           </div>
-        )}
-
-        {/* AI Security Assistant Floating Button */}
-        {!showAiChatSidebar && (
-          <FloatingAiButton 
-            onClick={() => setShowAiChatSidebar(true)}
-            hasResults={scanResults.length > 0}
-          />
         )}
 
         {/* Modals */}
@@ -479,10 +450,8 @@ const Index = () => {
         />
       </div>
 
-      {/* AI Chat Sidebar */}
-      <AiChatSidebar
-        isOpen={showAiChatSidebar}
-        onToggle={() => setShowAiChatSidebar(!showAiChatSidebar)}
+      {/* AI Assistant Sidebar */}
+      <AiAssistantSidebar
         scanResults={scanResults}
         scanMetadata={scanMetadata}
       />
