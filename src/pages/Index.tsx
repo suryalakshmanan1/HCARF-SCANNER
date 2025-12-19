@@ -271,25 +271,25 @@ const Index = () => {
         onDecline={handleDeclineAgreement}
       />
 
-      <div className="max-w-7xl mx-auto p-6 space-y-8 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6 space-y-6 md:space-y-8 transition-all duration-300">
         {/* Modern Header */}
-        <div className="text-center space-y-6 py-8">
-          <div className="flex items-center justify-center space-x-4">
+        <div className="text-center space-y-4 md:space-y-6 py-4 md:py-8">
+          <div className="flex items-center justify-center space-x-2 md:space-x-4">
             <div className="relative">
-              <Shield className="h-12 w-12 text-primary drop-shadow-lg" />
-              <div className="absolute inset-0 h-12 w-12 text-primary animate-pulse opacity-50" />
+              <Shield className="h-8 w-8 md:h-12 md:w-12 text-primary drop-shadow-lg" />
+              <div className="absolute inset-0 h-8 w-8 md:h-12 md:w-12 text-primary animate-pulse opacity-50" />
             </div>
             <div>
-              <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+              <h1 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
                 HCARF Scanner
               </h1>
-              <div className="h-1 w-24 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full mx-auto mt-2" />
+              <div className="h-1 w-20 md:w-24 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full mx-auto mt-1 md:mt-2" />
             </div>
           </div>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Advanced AI-powered domain security scanner with real-time threat analysis and professional reporting
+          <p className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed px-2">
+            Advanced AI-powered domain security scanner with real-time threat analysis
           </p>
-          <div className="flex items-center justify-center space-x-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 text-xs md:text-sm text-muted-foreground">
             <div className="flex items-center space-x-2">
               <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
               <span>AI Enhanced</span>
@@ -307,70 +307,72 @@ const Index = () => {
 
         {/* Modern Scanner Card */}
         <Card className="scanner-card backdrop-blur-sm bg-gradient-to-br from-background/80 to-background/60 border-primary/20 shadow-2xl shadow-primary/10">
-          <CardHeader className="pb-6">
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+          <CardHeader className="pb-4 md:pb-6">
+            <CardTitle className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center space-x-2 md:space-x-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
-                  <Search className="h-6 w-6 text-primary" />
+                  <Search className="h-5 w-5 md:h-6 md:w-6 text-primary" />
                 </div>
                 <div>
-                  <span className="text-xl">Domain Security Analysis</span>
-                  <div className="text-sm text-muted-foreground font-normal">
+                  <span className="text-lg md:text-xl">Domain Security Analysis</span>
+                  <div className="text-xs md:text-sm text-muted-foreground font-normal">
                     Powered by advanced AI threat detection
                   </div>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 whitespace-nowrap">
                 <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-xs text-muted-foreground">System Online</span>
               </div>
             </CardTitle>
-            <CardDescription className="text-base">
+            <CardDescription className="text-sm md:text-base mt-2">
               Enter a domain to perform comprehensive security scanning across GitHub, Google, and other public sources
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="flex space-x-4">
+          <CardContent className="space-y-6 md:space-y-8">
+            <div className="flex flex-col md:flex-row gap-2 md:gap-4">
               <div className="flex-1">
                 <div className="relative">
                   <Input
-                    placeholder="Enter domain (e.g., example.com or https://example.com)"
+                    placeholder="Enter domain (e.g., example.com)"
                     value={domain}
                     onChange={(e) => setDomain(e.target.value)}
-                    className="text-lg h-12 pl-4 pr-12 bg-background/80 border-primary/30 focus:border-primary/50 focus:ring-primary/20 shadow-sm"
+                    className="text-sm md:text-lg h-10 md:h-12 pl-4 pr-12 bg-background/80 border-primary/30 focus:border-primary/50 focus:ring-primary/20 shadow-sm"
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
                     🔍
                   </div>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowApiConfig(true)}
-                title="Configure API Keys"
-                className="h-12 w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors"
-              >
-                <Settings className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowHelp(true)}
-                title="Help & Tutorials"
-                className="h-12 w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowAbout(true)}
-                title="About HCARF Scanner"
-                className="h-12 w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors"
-              >
-                <Globe className="h-5 w-5" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowApiConfig(true)}
+                  title="Configure API Keys"
+                  className="h-10 w-10 md:h-12 md:w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors flex-shrink-0"
+                >
+                  <Settings className="h-4 w-4 md:h-5 md:w-5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowHelp(true)}
+                  title="Help & Tutorials"
+                  className="h-10 w-10 md:h-12 md:w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors flex-shrink-0"
+                >
+                  <HelpCircle className="h-4 w-4 md:h-5 md:w-5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowAbout(true)}
+                  title="About HCARF Scanner"
+                  className="h-10 w-10 md:h-12 md:w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors flex-shrink-0"
+                >
+                  <Globe className="h-4 w-4 md:h-5 md:w-5" />
+                </Button>
+              </div>
             </div>
 
             <div className="bg-gradient-to-r from-background/50 to-muted/30 rounded-lg p-4 border border-primary/10">
@@ -397,13 +399,13 @@ const Index = () => {
             <Button 
               onClick={handleScan}
               disabled={!captchaSolved || isScanning || !domain}
-              className="w-full scanner-button py-4 text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg hover:shadow-xl transition-all duration-300"
+              className="w-full scanner-button py-3 md:py-4 text-base md:text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg hover:shadow-xl transition-all duration-300"
             >
               {isScanning ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
-                  <span>Scanning Domain...</span>
-                  <div className="ml-3 flex space-x-1">
+                  <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-b-2 border-white mr-2 md:mr-3" />
+                  <span>Scanning...</span>
+                  <div className="ml-2 md:ml-3 flex space-x-1">
                     <div className="w-1 h-1 bg-white rounded-full animate-bounce" />
                     <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
                     <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
@@ -411,8 +413,8 @@ const Index = () => {
                 </>
               ) : (
                 <>
-                  <Shield className="h-5 w-5 mr-3" />
-                  <span>Start Advanced Security Scan</span>
+                  <Shield className="h-4 w-4 md:h-5 md:w-5 mr-2 md:mr-3" />
+                  <span>Start Security Scan</span>
                 </>
               )}
             </Button>
@@ -441,29 +443,29 @@ const Index = () => {
             {/* Scan Summary */}
             {scanMetadata && (
               <Card className="border border-primary/20 bg-gradient-to-r from-background via-background to-primary/5">
-                <CardContent className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <CardContent className="p-4 md:p-6">
+                  <div className="grid grid-cols-2 gap-3 md:gap-4 text-center">
                     <div>
-                      <div className="text-2xl font-bold text-primary">{scanResults.length}</div>
-                      <div className="text-sm text-muted-foreground">Issues Found</div>
+                      <div className="text-xl md:text-2xl font-bold text-primary">{scanResults.length}</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Issues Found</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-destructive">
+                      <div className="text-xl md:text-2xl font-bold text-destructive">
                         {scanResults.filter(r => r.severity === 'Critical').length}
                       </div>
-                      <div className="text-sm text-muted-foreground">Critical</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Critical</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-orange-500">
+                      <div className="text-xl md:text-2xl font-bold text-orange-500">
                         {scanResults.filter(r => r.severity === 'High').length}
                       </div>
-                      <div className="text-sm text-muted-foreground">High Risk</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">High Risk</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-green-500">
+                      <div className="text-xl md:text-2xl font-bold text-green-500">
                         {scanMetadata.scanDuration}ms
                       </div>
-                      <div className="text-sm text-muted-foreground">Scan Time</div>
+                      <div className="text-xs md:text-sm text-muted-foreground">Scan Time</div>
                     </div>
                   </div>
                 </CardContent>
@@ -471,7 +473,7 @@ const Index = () => {
             )}
 
             {/* Results Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <ScanResults 
                   results={scanResults} 
@@ -485,7 +487,7 @@ const Index = () => {
                   }}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <ExportPanel results={scanResults} metadata={scanMetadata} />
               </div>
             </div>

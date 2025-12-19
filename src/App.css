@@ -1,7 +1,21 @@
+/* filepath: src/App.css */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body, input, button, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 #root {
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
   text-align: center;
 }
 
@@ -34,9 +48,47 @@
 }
 
 .card {
-  padding: 2em;
+  padding: 1.5em;
 }
 
 .read-the-docs {
   color: #888;
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+
+  .scanner-card {
+    border-radius: 0.75rem;
+  }
+
+  button {
+    min-height: 2.5rem; /* Ensure touch-friendly button size */
+  }
+
+  input, textarea {
+    min-height: 2.5rem;
+  }
+}
+
+/* Ensure proper viewport */
+@media (max-width: 640px) {
+  #root {
+    padding: 0;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  h1 {
+    font-size: 1.875rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
 }
