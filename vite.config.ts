@@ -4,10 +4,6 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
-  base: "/HCARF-SCANNER/",
-  build: {
-    outDir: "dist",
-  },
   server: {
     host: "::",
     port: 8080,
