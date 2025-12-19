@@ -255,4 +255,4 @@ All critical features implemented and tested. The HCARF Scanner is ready for pro
 
 **Last Updated:** 2025-09-30  
 **Version:** 3.0 (Production Release)  
-**Built with:** ❤️ for the cybersecurity community
+**Built with:** 🛡️ HCARF Scanner for the cybersecurity community

@@ -13,6 +13,11 @@ interface GoogleScanResult {
   queries: number;
   success: number;
   failed: number;
+  queriesUsed?: string[];
+  rateLimitInfo?: {
+    dailyLimit: number;
+    queriesRemaining: number;
+  };
 }
 
 // Generate domain variations for better search coverage
@@ -73,11 +78,27 @@ const generateDorkingQueries = (domain: string): string[] => {
 export const googleScanner = async (domain: string, apiKey: string, cx: string): Promise<GoogleScanResult> => {
   const results: GoogleResult[] = [];
   const processedUrls = new Set<string>();
+  const queriesUsed: string[] = [];
   let queries = 0;
   let success = 0;
   let failed = 0;
+  let queriesRemaining = 100; // Google CSE gives 100 free queries per day
 
   const searchQueries = generateDorkingQueries(domain);
+
+  // Rate limiter for Google Custom Search (to avoid quota exhaustion)
+  const rateLimiter = {
+    baseDelay: 1000, // 1 second between requests (Google allows 100/day, ~6 per minute)
+    maxDelay: 10000,
+    currentDelay: 1000,
+    async wait() {
+      await new Promise(resolve => setTimeout(resolve, this.currentDelay));
+      this.currentDelay = Math.min(this.currentDelay * 1.05, this.maxDelay);
+    },
+    reset() {
+      this.currentDelay = this.baseDelay;
+    }
+  };
 
   // Helper function to detect severity
   const detectSeverity = (content: string): { severity: 'Low' | 'Medium' | 'High' | 'Critical'; recommendation: string } => {
@@ -115,7 +136,14 @@ export const googleScanner = async (domain: string, apiKey: string, cx: string):
   };
 
   for (const query of searchQueries) {
+    // Stop if we're running low on daily quota
+    if (queriesRemaining <= 5) {
+      console.warn(`Google API quota running low: ${queriesRemaining} queries remaining`);
+      break;
+    }
+
     queries++;
+    queriesUsed.push(query);
     
     try {
       const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=10`;
@@ -125,6 +153,7 @@ export const googleScanner = async (domain: string, apiKey: string, cx: string):
       if (response.ok) {
         const data = await response.json();
         success++;
+        queriesRemaining--; // Decrement quota count
 
         if (data.items && data.items.length > 0) {
           console.log(`Google: Query "${query}" found ${data.items.length} results`);
@@ -146,21 +175,24 @@ export const googleScanner = async (domain: string, apiKey: string, cx: string):
               severity,
               recommendation,
               isValidated: true,
-              confidence: 0.75
+              confidence: 0.75,
+              sourcePayload: query
             });
           }
         }
       } else if (response.status === 429) {
         console.warn('Google API rate limit exceeded');
         failed++;
+        // Wait longer if rate limited
+        await new Promise(resolve => setTimeout(resolve, 30000));
         break;
       } else {
         console.error('Google search failed:', response.status);
         failed++;
       }
 
-      // Rate limiting - Google Custom Search API allows 100 queries per day
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Polite rate limiting - respect Google's quota
+      await rateLimiter.wait();
 
     } catch (error) {
       console.error('Google search error:', error);
@@ -189,6 +221,11 @@ export const googleScanner = async (domain: string, apiKey: string, cx: string):
     results: results.slice(0, 50), // Limit to 50 results
     queries,
     success,
-    failed
+    failed,
+    queriesUsed,
+    rateLimitInfo: {
+      dailyLimit: 100,
+      queriesRemaining
+    }
   };
 };

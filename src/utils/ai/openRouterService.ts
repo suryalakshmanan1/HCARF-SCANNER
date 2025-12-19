@@ -1,4 +1,5 @@
 import { ScanResult, ScanMetadata } from '@/pages/Index';
+import { generateHCARFSystemPrompt } from '@/utils/ai/hcarfContext';
 
 interface OpenRouterRequest {
   model: string;
@@ -21,7 +22,8 @@ interface OpenRouterResponse {
 class OpenRouterService {
   private apiKey: string;
   private baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-  private model = 'anthropic/claude-3-haiku';
+  // Use faster, more efficient model for better response time
+  private model = 'openai/gpt-3.5-turbo'; // Much faster than Claude
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -205,53 +207,27 @@ Format as JSON:
     conversationHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
   ): Promise<string> {
     try {
-      const context = {
-        domain: scanMetadata?.domain || 'Unknown',
-        resultCount: scanResults.length,
-        severityBreakdown: {
-          critical: scanResults.filter(r => r.severity === 'Critical').length,
-          high: scanResults.filter(r => r.severity === 'High').length,
-          medium: scanResults.filter(r => r.severity === 'Medium').length,
-          low: scanResults.filter(r => r.severity === 'Low').length,
-        }
-      };
+      const domain = scanMetadata?.domain || 'your domain';
+      const resultCount = scanResults.length;
+      
+      // Generate concise HCARF context for faster processing
+      const systemPrompt = generateHCARFSystemPrompt(domain, resultCount);
 
-      const systemPrompt = `You are HACRF Security Assistant, an AI cybersecurity expert helping users understand their security scan results.
-
-Current scan context:
-- Domain: ${context.domain}
-- Total findings: ${context.resultCount}
-- Critical: ${context.severityBreakdown.critical}
-- High: ${context.severityBreakdown.high}
-- Medium: ${context.severityBreakdown.medium}
-- Low: ${context.severityBreakdown.low}
-
-Guidelines:
-- Be helpful and professional
-- Focus on actionable security advice
-- Reference the specific findings when relevant
-- Never reveal internal system details, API keys, or sensitive project information
-- Provide clear, concise responses
-- Use security terminology appropriately
-- Suggest concrete remediation steps
-
-Recent findings summary:
-${scanResults.slice(0, 3).map(r => `- ${r.severity} finding in ${r.source}: ${r.snippet.substring(0, 100)}...`).join('\n')}`;
-
-        const messages = [
-          { role: 'system' as const, content: systemPrompt },
-          ...conversationHistory.slice(-6).map(m => ({ 
-            role: m.role as 'system' | 'user' | 'assistant', 
-            content: m.content 
-          })),
-          { role: 'user' as const, content: message }
-        ];
+      // Only use last 3 messages for faster processing (not 6)
+      const messages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...conversationHistory.slice(-3).map(m => ({ 
+          role: m.role as 'system' | 'user' | 'assistant', 
+          content: m.content 
+        })),
+        { role: 'user' as const, content: message }
+      ];
 
       const response = await this.makeRequest({
         model: this.model,
         messages,
-        temperature: 0.7,
-        max_tokens: 800
+        temperature: 0.6, // Reduced from 0.7 for more focused, faster responses
+        max_tokens: 500   // Reduced from 800 to encourage concise responses
       });
 
       return response.choices[0]?.message?.content || 'I apologize, but I encountered an issue processing your request. Please try again.';
@@ -263,16 +239,23 @@ ${scanResults.slice(0, 3).map(r => `- ${r.severity} finding in ${r.source}: ${r.
 
   private async makeRequest(payload: OpenRouterRequest): Promise<OpenRouterResponse> {
     try {
+      // Create abort controller with 30-second timeout for faster failure
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': window.location.origin,
-          'X-Title': 'HACRF Security Scanner'
+          'X-Title': 'HCARF Security Scanner'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -284,7 +267,11 @@ ${scanResults.slice(0, 3).map(r => `- ${r.severity} finding in ${r.source}: ${r.
 
       const data = await response.json();
       return data as OpenRouterResponse;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.error('[OpenRouter] Request timeout (30s)');
+        throw new Error('Response timeout - please try again');
+      }
       console.error('[OpenRouter] Request failed:', error);
       throw error;
     }

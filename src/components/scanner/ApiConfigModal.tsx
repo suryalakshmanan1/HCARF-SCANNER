@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { Key, Eye, EyeOff, ExternalLink, HelpCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 
 interface ApiKeys {
@@ -103,20 +104,30 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         messages.google = 'ⓘ Google API key or Custom Search Engine ID is empty';
       }
 
-      // Test AI API key
+      // Test AI API key with actual API call
       if (keys.aiApiKey && keys.aiApiKey.trim().length > 0) {
         try {
-          // Check format and length
-          if (keys.aiApiKey.length > 10) {
+          // Make a test request to OpenRouter API to validate the key
+          const aiResponse = await fetch('https://openrouter.ai/api/v1/models', {
+            headers: { 
+              'Authorization': `Bearer ${keys.aiApiKey}`,
+              'HTTP-Referer': 'https://hcarf-scanner.com',
+            }
+          });
+          
+          if (aiResponse.ok) {
             validationResults.aiApiKey = true;
-            messages.aiApiKey = '✓ AI API Key format is valid';
+            messages.aiApiKey = '✓ OpenRouter AI API Key is VALID';
+          } else if (aiResponse.status === 401 || aiResponse.status === 403) {
+            validationResults.aiApiKey = false;
+            messages.aiApiKey = '✗ Invalid OpenRouter API key (401 Unauthorized)';
           } else {
             validationResults.aiApiKey = false;
-            messages.aiApiKey = '✗ AI API Key is too short';
+            messages.aiApiKey = `✗ OpenRouter API error: ${aiResponse.status}`;
           }
-        } catch {
+        } catch (error) {
           validationResults.aiApiKey = false;
-          messages.aiApiKey = '✗ Invalid AI API Key format';
+          messages.aiApiKey = '✗ Cannot reach OpenRouter API (Network error or invalid key)';
         }
       } else if (keys.aiApiKey) {
         validationResults.aiApiKey = 'empty';
@@ -172,7 +183,8 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
@@ -235,7 +247,22 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="github-token">Personal Access Token</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="github-token">Personal Access Token</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <div className="space-y-2">
+                        <p className="font-semibold">GitHub API Key</p>
+                        <p className="text-xs">Go to GitHub Settings → Developer Settings → Personal Access Tokens → Generate new token. Select "public_repo" scope.</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <div className="flex space-x-2">
                   <Input
                     id="github-token"
@@ -293,7 +320,25 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="google-api">Google API Key</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="google-api">Google API Key</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <div className="space-y-2">
+                        <p className="font-semibold">Google API Key (AIzaSy...)</p>
+                        <p className="text-xs">1. Go to Google Cloud Console</p>
+                        <p className="text-xs">2. Create project and enable Custom Search API</p>
+                        <p className="text-xs">3. Create credentials → API Key</p>
+                        <p className="text-xs">Requires 2-Step Verification enabled</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <div className="flex space-x-2">
                   <Input
                     id="google-api"
@@ -325,7 +370,26 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="google-cx">Custom Search Engine ID</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="google-cx">Custom Search Engine ID</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <div className="space-y-2">
+                        <p className="font-semibold">Search Engine ID (cx)</p>
+                        <p className="text-xs font-semibold">⚠️ Most Important: IGNORE Google's HTML code</p>
+                        <p className="text-xs">1. Go to Programmable Search Engine</p>
+                        <p className="text-xs">2. Create new search engine (search entire web)</p>
+                        <p className="text-xs">3. Setup → Basics → Copy Search engine ID</p>
+                        <p className="text-xs">Looks like: 012345:abcDEF...</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <div className="flex space-x-2">
                   <Input
                     id="google-cx"
@@ -371,7 +435,24 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="ai-api-key">AI API Key</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="ai-api-key">AI API Key</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <div className="space-y-2">
+                        <p className="font-semibold">AI API Key (Optional)</p>
+                        <p className="text-xs"><strong>Without it:</strong> Basic scanning only</p>
+                        <p className="text-xs"><strong>With it:</strong> AI validation, chat support, remediation help</p>
+                        <p className="text-xs">Get from: OpenRouter.ai, OpenAI, or Anthropic</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <div className="flex space-x-2">
                   <Input
                     id="ai-api-key"
@@ -436,5 +517,6 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 };

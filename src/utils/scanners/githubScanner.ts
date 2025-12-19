@@ -13,6 +13,12 @@ interface GitHubScanResult {
   queries: number;
   success: number;
   failed: number;
+  queriesUsed?: string[];
+  rateLimitInfo?: {
+    limit: number;
+    remaining: number;
+    reset: number;
+  };
 }
 
 // Extract domain variations for better searches
@@ -74,16 +80,33 @@ const generateSearchQueries = (domain: string): string[] => {
 export const githubScanner = async (domain: string, token: string): Promise<GitHubScanResult> => {
   const results: GitHubResult[] = [];
   const processedUrls = new Set<string>();
+  const queriesUsed: string[] = [];
   let queries = 0;
   let success = 0;
   let failed = 0;
+  let rateLimitInfo = { limit: 60, remaining: 60, reset: 0 };
 
   const searchQueries = generateSearchQueries(domain);
 
   const headers = {
     'Authorization': `token ${token}`,
     'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': 'HCARF-Scanner'
+    'User-Agent': 'HCARF-Scanner/1.0 (+https://hcarf-scanner.com)'
+  };
+
+  // Rate limiter with exponential backoff for politeness
+  const rateLimiter = {
+    baseDelay: 2000, // 2 seconds between requests
+    maxDelay: 15000, // Max 15 seconds
+    currentDelay: 2000,
+    async wait() {
+      await new Promise(resolve => setTimeout(resolve, this.currentDelay));
+      // Increase delay slightly for next request (exponential backoff)
+      this.currentDelay = Math.min(this.currentDelay * 1.1, this.maxDelay);
+    },
+    reset() {
+      this.currentDelay = this.baseDelay;
+    }
   };
 
   // Helper function to detect severity
@@ -124,12 +147,26 @@ export const githubScanner = async (domain: string, token: string): Promise<GitH
 
   for (const query of searchQueries) {
     queries++;
+    queriesUsed.push(query);
     
     try {
       const codeResponse = await fetch(
         `https://api.github.com/search/code?q=${encodeURIComponent(query)}&per_page=50&sort=updated&order=desc`,
         { headers }
       );
+
+      // Extract rate limit info from response headers
+      const remaining = codeResponse.headers.get('x-ratelimit-remaining');
+      const limit = codeResponse.headers.get('x-ratelimit-limit');
+      const reset = codeResponse.headers.get('x-ratelimit-reset');
+      
+      if (remaining && limit && reset) {
+        rateLimitInfo = {
+          limit: parseInt(limit),
+          remaining: parseInt(remaining),
+          reset: parseInt(reset) * 1000
+        };
+      }
 
       if (codeResponse.ok) {
         const codeData = await codeResponse.json();
@@ -155,13 +192,16 @@ export const githubScanner = async (domain: string, token: string): Promise<GitH
               severity,
               recommendation,
               isValidated: true,
-              confidence: 0.85
+              confidence: 0.85,
+              sourcePayload: query
             });
           }
         }
       } else if (codeResponse.status === 403) {
-        console.warn('GitHub API rate limit or permission denied');
+        console.warn(`GitHub API rate limit hit. Remaining: ${remaining}`);
         failed++;
+        // If rate limited, wait longer before next attempt
+        rateLimiter.currentDelay = 30000;
         break;
       } else if (codeResponse.status === 422) {
         // Invalid search query
@@ -171,12 +211,14 @@ export const githubScanner = async (domain: string, token: string): Promise<GitH
         failed++;
       }
 
-      // Rate limiting - GitHub API allows 30 requests per minute for search
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Polite rate limiting - respects GitHub's rate limit
+      await rateLimiter.wait();
 
     } catch (error) {
       console.error('GitHub search error:', error);
       failed++;
+      // On error, wait longer
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
   }
 
@@ -201,6 +243,8 @@ export const githubScanner = async (domain: string, token: string): Promise<GitH
     results: results.slice(0, 50), // Limit to 50 results
     queries,
     success,
-    failed
+    failed,
+    queriesUsed,
+    rateLimitInfo
   };
 };

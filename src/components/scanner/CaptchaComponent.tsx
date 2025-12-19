@@ -8,9 +8,16 @@ import { generateCaptcha, validateCaptcha } from '@/utils/api/captcha';
 
 interface CaptchaComponentProps {
   onSolved: (solved: boolean) => void;
+  ref?: React.RefObject<CaptchaHandle>;
 }
 
-export const CaptchaComponent: React.FC<CaptchaComponentProps> = ({ onSolved }) => {
+export interface CaptchaHandle {
+  refreshCaptcha: () => void;
+  resetCaptcha: () => void;
+}
+
+export const CaptchaComponent = React.forwardRef<CaptchaHandle, CaptchaComponentProps>(
+  ({ onSolved }, ref) => {
   const [captchaImage, setCaptchaImage] = useState('');
   const [captchaId, setCaptchaId] = useState('');
   const [userInput, setUserInput] = useState('');
@@ -73,6 +80,20 @@ export const CaptchaComponent: React.FC<CaptchaComponentProps> = ({ onSolved }) 
     fetchCaptcha();
   }, []);
 
+  // Expose refresh and reset methods for parent component
+  React.useImperativeHandle(ref, () => ({
+    refreshCaptcha: () => {
+      fetchCaptcha();
+    },
+    resetCaptcha: () => {
+      onSolved(false);
+      setUserInput('');
+      setCaptchaImage('');
+      setCaptchaId('');
+      fetchCaptcha();
+    }
+  }));
+
   return (
     <Card>
       <CardHeader>
@@ -120,4 +141,6 @@ export const CaptchaComponent: React.FC<CaptchaComponentProps> = ({ onSolved }) 
       </CardContent>
     </Card>
   );
-};
+});
+
+CaptchaComponent.displayName = 'CaptchaComponent';

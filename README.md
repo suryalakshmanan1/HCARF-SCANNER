@@ -352,4 +352,4 @@ This is a static React application that can be deployed to:
 
 ---
 
-**Made with ❤️ for the cybersecurity community**
+**Made with 🛡️ HCARF Scanner for the cybersecurity community**

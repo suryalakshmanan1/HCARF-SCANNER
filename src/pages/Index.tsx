@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Search, Settings, MessageSquare, FileDown, Github, Globe, Brain, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, Search, Settings, MessageSquare, FileDown, Github, Globe, Brain, CheckCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { CaptchaComponent } from '@/components/scanner/CaptchaComponent';
+import { CaptchaComponent, CaptchaHandle } from '@/components/scanner/CaptchaComponent';
 import { ApiConfigModal } from '@/components/scanner/ApiConfigModal';
 import { ScanResults } from '@/components/scanner/ScanResults';
 import { ExportPanel } from '@/components/scanner/ExportPanel';
@@ -15,6 +15,8 @@ import { AiAssistantSidebar } from '@/components/scanner/AiAssistantSidebar';
 import { SecurityGuidelinesModal } from '@/components/scanner/SecurityGuidelinesModal';
 import { SecurityTipsCard } from '@/components/scanner/SecurityTipsCard';
 import { UserAgreementModal } from '@/components/scanner/UserAgreementModal';
+import { AboutModal } from '@/components/scanner/AboutModal';
+import { HelpPanel } from '@/components/scanner/HelpPanel';
 import { RadarProgressIndicator, ScanStep } from '@/components/scanner/RadarProgressIndicator';
 import { performScan } from '@/utils/api/scanner';
 import { performEnhancedScan } from '@/utils/ai/enhancedScanner';
@@ -25,6 +27,7 @@ export interface ScanResult {
   snippet: string;
   severity: 'Low' | 'Medium' | 'High' | 'Critical' | 'Informational';
   recommendation: string;
+  sourcePayload?: string;
 }
 
 export interface ScanMetadata {
@@ -40,6 +43,10 @@ export interface ScanMetadata {
   modeDisclaimer?: string;
   validKeys?: string[];
   invalidKeys?: string[];
+  payloadsUsed?: string[];
+  payloadCount?: number;
+  githubQueries?: number;
+  googleQueries?: number;
 }
 
 const Index = () => {
@@ -50,6 +57,11 @@ const Index = () => {
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [showSecurityGuidelines, setShowSecurityGuidelines] = useState(false);
   const [showUserAgreement, setShowUserAgreement] = useState(() => !localStorage.getItem('privacyAccepted'));
+  const [showAbout, setShowAbout] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [apiKeyWarning, setApiKeyWarning] = useState<string | null>(null);
+  
+  const captchaRef = useRef<CaptchaHandle>(null);
   
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanMetadata, setScanMetadata] = useState<ScanMetadata | null>(null);
@@ -147,6 +159,14 @@ const Index = () => {
     try {
       const storedApiKeys = JSON.parse(sessionStorage.getItem('apiKeys') || '{}');
       
+      // Check if GitHub key is available - this is REQUIRED for real scanning
+      if (!storedApiKeys.github || !storedApiKeys.github.trim()) {
+        setApiKeyWarning('⚠️ GitHub API key not configured. Scan will use DEMO mode with example findings. To get real findings, add your GitHub API key in Settings.');
+        console.warn('[SCAN] GitHub API key missing - falling back to DEMO mode');
+      } else {
+        setApiKeyWarning(null);
+      }
+      
       // Progress callback for REAL scanner updates
       const handleScanProgress = (phase: string, progress: number, message: string) => {
         console.log(`[UI] Progress: ${phase} - ${progress}% - ${message}`);
@@ -231,6 +251,14 @@ const Index = () => {
       ));
     } finally {
       setIsScanning(false);
+      
+      // Refresh CAPTCHA after scan completes (success or failure)
+      // This ensures the same CAPTCHA token cannot be reused for another scan
+      if (captchaRef.current) {
+        setTimeout(() => {
+          captchaRef.current?.resetCaptcha();
+        }, 500);
+      }
     }
   };
 
@@ -325,11 +353,46 @@ const Index = () => {
               >
                 <Settings className="h-5 w-5" />
               </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowHelp(true)}
+                title="Help & Tutorials"
+                className="h-12 w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowAbout(true)}
+                title="About HCARF Scanner"
+                className="h-12 w-12 border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-colors"
+              >
+                <Globe className="h-5 w-5" />
+              </Button>
             </div>
 
             <div className="bg-gradient-to-r from-background/50 to-muted/30 rounded-lg p-4 border border-primary/10">
-              <CaptchaComponent onSolved={setCaptchaSolved} />
+              <CaptchaComponent ref={captchaRef} onSolved={setCaptchaSolved} />
             </div>
+
+            {apiKeyWarning && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-amber-700 font-medium">{apiKeyWarning}</p>
+                    <button 
+                      onClick={() => setShowApiConfig(true)}
+                      className="text-xs text-amber-600 hover:text-amber-700 underline mt-2"
+                    >
+                      Configure API Keys
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Button 
               onClick={handleScan}
@@ -447,6 +510,16 @@ const Index = () => {
         <SecurityGuidelinesModal
           open={showSecurityGuidelines}
           onOpenChange={setShowSecurityGuidelines}
+        />
+
+        <AboutModal
+          isOpen={showAbout}
+          onClose={() => setShowAbout(false)}
+        />
+
+        <HelpPanel
+          isOpen={showHelp}
+          onClose={() => setShowHelp(false)}
         />
       </div>
 

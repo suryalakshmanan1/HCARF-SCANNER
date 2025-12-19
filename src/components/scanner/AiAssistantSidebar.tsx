@@ -38,6 +38,7 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
   const [isApiKeyValid, setIsApiKeyValid] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typewriterRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingRef = useRef(false); // Prevent multiple simultaneous requests
 
   // Initialize AI service with user's API key - CHECK EVERY TIME
   useEffect(() => {
@@ -49,7 +50,7 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
       const welcomeMsg = {
         id: '1',
         role: 'assistant' as const,
-        content: `🛡️ Welcome to HACRF Security Assistant!\n\nI've analyzed **${domain}** and found **${findingsCount} security finding${findingsCount !== 1 ? 's' : ''}**.\n\nI'm here to help you:\n• Understand each finding\n• Get step-by-step remediation advice\n• Answer security questions\n• Provide best practices\n\nWhat would you like to know?`,
+        content: `🛡️ Welcome to HCARF Security Assistant!\n\nI've analyzed **${domain}** and found **${findingsCount} security finding${findingsCount !== 1 ? 's' : ''}**.\n\nI'm here to help you:\n• Understand each finding\n• Get step-by-step remediation advice\n• Answer security questions\n• Provide best practices\n\nWhat would you like to know?`,
         timestamp: new Date(),
       };
       
@@ -104,7 +105,14 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
   useEffect(() => {
     const handleAskAiEvent = async () => {
       const pendingQuestion = sessionStorage.getItem('pendingAiQuestion');
-      if (pendingQuestion && aiService) {
+      // Prevent multiple simultaneous requests
+      if (!pendingQuestion || !aiService || isProcessingRef.current) {
+        return;
+      }
+
+      isProcessingRef.current = true;
+      
+      try {
         setIsOpen(true); // Open the sidebar
         
         // Add user message
@@ -119,67 +127,65 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
         setInput('');
         setIsLoading(true);
 
-        try {
-          // Add empty assistant message for typewriter effect
-          const assistantMessageId = (Date.now() + 1).toString();
-          setMessages(prev => [...prev, {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: '',
-            timestamp: new Date(),
-          }]);
+        // Add empty assistant message for typewriter effect
+        const assistantMessageId = (Date.now() + 1).toString();
+        setMessages(prev => [...prev, {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+        }]);
 
-          const response = await aiService.generateConversationalResponse(
-            pendingQuestion,
-            scanResults,
-            scanMetadata,
-            [userMessage].map(m => ({ role: m.role, content: m.content }))
-          );
+        const response = await aiService.generateConversationalResponse(
+          pendingQuestion,
+          scanResults,
+          scanMetadata,
+          [userMessage].map(m => ({ role: m.role, content: m.content }))
+        );
 
-          // Use typewriter effect for response
-          let currentText = '';
-          let currentIndex = 0;
-          setIsTyping(true);
+        // Fast typewriter effect (10ms instead of 20ms) for better perceived performance
+        let currentText = '';
+        let currentIndex = 0;
+        setIsTyping(true);
 
-          const typeNextCharacter = () => {
-            if (currentIndex < response.length) {
-              currentText += response[currentIndex];
-              setMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages[newMessages.length - 1]?.role === 'assistant') {
-                  newMessages[newMessages.length - 1] = {
-                    ...newMessages[newMessages.length - 1],
-                    content: currentText
-                  };
-                }
-                return newMessages;
-              });
-              currentIndex++;
-              typewriterRef.current = setTimeout(typeNextCharacter, 20);
-            } else {
-              setIsTyping(false);
-              setIsLoading(false);
-            }
-          };
+        const typeNextCharacter = () => {
+          if (currentIndex < response.length) {
+            currentText += response[currentIndex];
+            setMessages(prev => {
+              const newMessages = [...prev];
+              if (newMessages[newMessages.length - 1]?.role === 'assistant') {
+                newMessages[newMessages.length - 1] = {
+                  ...newMessages[newMessages.length - 1],
+                  content: currentText
+                };
+              }
+              return newMessages;
+            });
+            currentIndex++;
+            typewriterRef.current = setTimeout(typeNextCharacter, 10);
+          } else {
+            setIsTyping(false);
+            setIsLoading(false);
+          }
+        };
 
-          typeNextCharacter();
-        } catch (error) {
-          console.error('AI response error:', error);
-          setMessages(prev => {
-            const newMessages = [...prev];
-            if (newMessages[newMessages.length - 1]?.role === 'assistant') {
-              newMessages[newMessages.length - 1] = {
-                ...newMessages[newMessages.length - 1],
-                content: '⚠️ Unable to generate response. Please check your API key configuration and try again.'
-              };
-            }
-            return newMessages;
-          });
-          setIsLoading(false);
-        }
-        
-        // Clear the pending question
+        typeNextCharacter();
+      } catch (error) {
+        console.error('AI response error:', error);
+        setMessages(prev => {
+          const newMessages = [...prev];
+          if (newMessages[newMessages.length - 1]?.role === 'assistant') {
+            newMessages[newMessages.length - 1] = {
+              ...newMessages[newMessages.length - 1],
+              content: '⚠️ Unable to generate response. Please check your API key configuration and try again.'
+            };
+          }
+          return newMessages;
+        });
+        setIsLoading(false);
+      } finally {
         sessionStorage.removeItem('pendingAiQuestion');
+        isProcessingRef.current = false;
       }
     };
 
@@ -217,7 +223,10 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !aiService) return;
+    // Prevent multiple simultaneous requests
+    if (!input.trim() || !aiService || isProcessingRef.current) return;
+    
+    isProcessingRef.current = true;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -240,11 +249,12 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
         timestamp: new Date(),
       }]);
 
+      // Only send last 3 messages for faster processing (not 6)
       const response = await aiService.generateConversationalResponse(
         userMessage.content,
         scanResults,
         scanMetadata,
-        messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
+        messages.slice(-3).map(m => ({ role: m.role, content: m.content }))
       );
 
       typewriterEffect(response, () => {
@@ -266,6 +276,7 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
       setIsTyping(false);
     } finally {
       setIsLoading(false);
+      isProcessingRef.current = false;
     }
   };
 
@@ -327,7 +338,7 @@ export const AiAssistantSidebar: React.FC<AiAssistantSidebarProps> = ({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    HACRF Security Assistant
+                    HCARF Security Assistant
                   </h2>
                   <p className="text-xs text-muted-foreground">
                     {isApiKeyValid ? 'AI-Powered • Ready to Help' : 'Configure API Key to Start'}

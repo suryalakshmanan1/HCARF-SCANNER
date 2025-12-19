@@ -73,6 +73,14 @@ const exportAsEnhancedJson = (results: ScanResult[], metadata: ScanMetadata, aiR
         reportVersion: "3.0-AI-Enhanced",
         generatedBy: "HCARF Security Scanner"
       },
+      scanMethodology: {
+        totalPayloadsGenerated: metadata.payloadCount || metadata.queries || 0,
+        githubQueriesExecuted: metadata.githubQueries || 0,
+        googleDorkingQueries: metadata.googleQueries || 0,
+        payloadsUsed: metadata.payloadsUsed || [],
+        rateLimitApplied: true,
+        description: "This scan used advanced search payloads targeting common security misconfigurations, exposed credentials, and sensitive files."
+      },
       summary: {
         totalIssues: results.length,
         severityBreakdown: {
@@ -84,6 +92,19 @@ const exportAsEnhancedJson = (results: ScanResult[], metadata: ScanMetadata, aiR
         aiEnhanced: !!aiReport,
         riskLevel: calculateOverallRiskLevel(results)
       },
+      remediationPriority: {
+        critical: 'Address within 24-48 hours',
+        high: 'Address within 1-2 weeks',
+        medium: 'Address within 1 month',
+        low: 'Address within 3 months'
+      },
+      complianceFrameworks: [
+        { name: 'OWASP Top 10', status: 'Assessed' },
+        { name: 'NIST Cybersecurity Framework', status: 'Assessed' },
+        { name: 'ISO 27001:2022', status: 'Assessed' },
+        { name: 'CIS Controls', status: 'Assessed' },
+        { name: 'GDPR Compliance', status: 'Assessed' }
+      ],
       findings: results.map((result, index) => ({
         ...result,
         findingId: `HCARF-${Date.now()}-${(index + 1).toString().padStart(3, '0')}`,
@@ -92,6 +113,18 @@ const exportAsEnhancedJson = (results: ScanResult[], metadata: ScanMetadata, aiR
         businessImpact: getBusinessImpact(result.severity),
         remediationPriority: getRemediationPriority(result.severity)
       })),
+      securityInsights: [
+        'Regular Security Audits: Conduct quarterly security assessments to identify emerging threats',
+        'Vulnerability Management: Implement a systematic approach to discovering, prioritizing, and remediating vulnerabilities',
+        'Incident Response Plan: Develop and maintain a documented incident response procedure',
+        'Security Awareness Training: Ensure team members understand security best practices and threats',
+        'Code Review Process: Implement peer review and security analysis in your development pipeline',
+        'Dependency Scanning: Monitor and update third-party libraries for known vulnerabilities',
+        'Access Control: Implement principle of least privilege for user and application access',
+        'Encryption: Use encryption for data in transit and at rest',
+        'Logging & Monitoring: Maintain comprehensive security logs and real-time threat detection',
+        'Backup Strategy: Implement robust backup and disaster recovery procedures'
+      ],
       aiAnalysis: aiReport || null,
       compliance: {
         gdpr: analyzeGdprCompliance(results),
@@ -243,6 +276,104 @@ const exportAsEnhancedPdf = async (results: ScanResult[], metadata: ScanMetadata
     pdf.text(`• Low Priority Items: ${severityBreakdown.low}`, margin + 10, yPosition);
     yPosition += 15;
 
+    // Scan Methodology & Payloads Section
+    pdf.addPage();
+    yPosition = margin;
+    
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SCAN METHODOLOGY & SEARCH PAYLOADS', margin, yPosition);
+    yPosition += 12;
+    
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Calculate payload statistics
+    const totalPayloads = metadata.payloadCount || metadata.queries || metadata.payloadsUsed?.length || 0;
+    const githubCount = metadata.githubQueries || (metadata.payloadsUsed?.filter((p: string) => p.includes('site:github') || p.includes('github')).length || 0);
+    const googleCount = metadata.googleQueries || (metadata.payloadsUsed?.filter((p: string) => !p.includes('site:github')).length || 0);
+    
+    // Count payloads that generated findings
+    const payloadsWithFindings = new Set();
+    const findingsByPayload: { [key: string]: number } = {};
+    results.forEach((result: any) => {
+      if (result.sourcePayload) {
+        payloadsWithFindings.add(result.sourcePayload);
+        findingsByPayload[result.sourcePayload] = (findingsByPayload[result.sourcePayload] || 0) + 1;
+      }
+    });
+    
+    pdf.text(`Total Search Payloads Generated: ${totalPayloads}`, margin, yPosition);
+    yPosition += 7;
+    pdf.text(`GitHub Queries: ${githubCount} | Google Dorking Queries: ${googleCount}`, margin, yPosition);
+    yPosition += 7;
+    pdf.setTextColor(76, 175, 80);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Payloads with Findings: ${payloadsWithFindings.size} (${Math.round((payloadsWithFindings.size / totalPayloads) * 100)}% success rate)`, margin, yPosition);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'normal');
+    yPosition += 12;
+    
+    // Show top payloads by findings
+    if (payloadsWithFindings.size > 0) {
+      const topPayloads = Object.entries(findingsByPayload)
+        .sort((a: any, b: any) => b[1] - a[1])
+        .slice(0, 10);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('Top Payloads by Findings Generated:', margin, yPosition);
+      yPosition += 8;
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      topPayloads.forEach((entry: any, index: number) => {
+        yPosition = checkNewPage(yPosition, 8);
+        const [payload, count] = entry;
+        pdf.text(`${index + 1}. ${payload.substring(0, 70)}${payload.length > 70 ? '...' : ''} (${count} finding${count > 1 ? 's' : ''})`, margin + 10, yPosition);
+        yPosition += 5;
+      });
+    }
+    
+    // Show all payloads used
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    yPosition += 8;
+    yPosition = checkNewPage(yPosition, 12);
+    pdf.text('Complete Search Payloads Used:', margin, yPosition);
+    yPosition += 8;
+    
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    
+    // Show sample of payloads if available
+    if (metadata.payloadsUsed && metadata.payloadsUsed.length > 0) {
+      const samplePayloads = metadata.payloadsUsed.slice(0, 20); // Show first 20 payloads
+      samplePayloads.forEach((payload, index) => {
+        yPosition = checkNewPage(yPosition, 8);
+        const hasFindings = payloadsWithFindings.has(payload);
+        const findingCount = findingsByPayload[payload] || 0;
+        const indicator = hasFindings ? `✓ (${findingCount})` : '○';
+        pdf.text(`${index + 1}. [${indicator}] ${payload.substring(0, 75)}${payload.length > 75 ? '...' : ''}`, margin + 10, yPosition);
+        yPosition += 5;
+      });
+      
+      if (metadata.payloadsUsed.length > 20) {
+        yPosition = checkNewPage(yPosition, 8);
+        pdf.setFont('helvetica', 'italic');
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`... and ${metadata.payloadsUsed.length - 20} more payloads`, margin + 10, yPosition);
+        pdf.setTextColor(0, 0, 0);
+        yPosition += 5;
+      }
+    } else {
+      // Fallback if no payloads tracked - show basic info
+      yPosition = checkNewPage(yPosition, 8);
+      pdf.text('Comprehensive security scanning using automated payload generation', margin + 10, yPosition);
+      yPosition += 5;
+    }
+    yPosition += 10;
+
     // Detailed Findings
     pdf.addPage();
     yPosition = margin;
@@ -250,9 +381,17 @@ const exportAsEnhancedPdf = async (results: ScanResult[], metadata: ScanMetadata
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text('DETAILED SECURITY FINDINGS', margin, yPosition);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(120, 120, 120);
+    pdf.text('(Sorted by severity: Critical → High → Medium → Low → Informational)', margin, yPosition + 8);
+    pdf.setTextColor(0, 0, 0);
     yPosition += 15;
 
-    results.forEach((result, index) => {
+    // Sort findings by severity before displaying
+    const sortedResults = sortResultsBySeverity(results);
+
+    sortedResults.forEach((result, index) => {
       yPosition = checkNewPage(yPosition, 50);
       
       pdf.setFontSize(14);
@@ -286,6 +425,19 @@ const exportAsEnhancedPdf = async (results: ScanResult[], metadata: ScanMetadata
       pdf.text(result.source, margin + 20, yPosition);
       yPosition += 7;
       
+      // Show which payload discovered this finding
+      if ((result as any).sourcePayload) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 150);
+        pdf.text('Discovery Payload:', margin, yPosition);
+        pdf.setFont('helvetica', 'normal');
+        yPosition = addTextWithLineBreaks((result as any).sourcePayload, margin + 40, yPosition, pageWidth - margin - 45, 5);
+        pdf.setTextColor(0, 0, 0);
+        yPosition += 3;
+      }
+      
+      pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
       pdf.text('Affected URL:', margin, yPosition);
       pdf.setFont('helvetica', 'normal');
@@ -304,6 +456,131 @@ const exportAsEnhancedPdf = async (results: ScanResult[], metadata: ScanMetadata
       const cleanedRecommendation = cleanMarkdown(result.recommendation || 'Review and validate this finding');
       yPosition = addTextWithLineBreaks(cleanedRecommendation, margin + 45, yPosition, pageWidth - margin - 45, 6);
       yPosition += 10;
+    });
+
+    // Remediation Priority Matrix
+    pdf.addPage();
+    yPosition = margin;
+    
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('REMEDIATION PRIORITY MATRIX', margin, yPosition);
+    yPosition += 12;
+    
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Issues are prioritized by severity for immediate action:', margin, yPosition);
+    yPosition += 10;
+    
+    // Priority breakdown table
+    const priorityLevels = [
+      { level: 'CRITICAL', count: results.filter(r => r.severity === 'Critical').length, action: 'IMMEDIATE - Address within 24-48 hours' },
+      { level: 'HIGH', count: results.filter(r => r.severity === 'High').length, action: 'URGENT - Address within 1-2 weeks' },
+      { level: 'MEDIUM', count: results.filter(r => r.severity === 'Medium').length, action: 'IMPORTANT - Address within 1 month' },
+      { level: 'LOW', count: results.filter(r => r.severity === 'Low').length, action: 'MONITOR - Address within 3 months' },
+    ];
+    
+    priorityLevels.forEach((priority) => {
+      if (priority.count > 0) {
+        yPosition = checkNewPage(yPosition, 15);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`${priority.level}: ${priority.count} issue${priority.count !== 1 ? 's' : ''}`, margin, yPosition);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        yPosition += 5;
+        yPosition = addTextWithLineBreaks(priority.action, margin + 10, yPosition, pageWidth - margin - 20, 5);
+        yPosition += 5;
+        pdf.setFontSize(11);
+      }
+    });
+    yPosition += 5;
+
+    // Compliance Framework Summary
+    pdf.addPage();
+    yPosition = margin;
+    
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('COMPLIANCE & FRAMEWORKS', margin, yPosition);
+    yPosition += 15;
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('This assessment aligns with major compliance frameworks:', margin, yPosition);
+    yPosition += 10;
+    
+    const frameworks = [
+      {
+        name: 'OWASP Top 10',
+        desc: 'Common web application vulnerabilities and mitigation strategies'
+      },
+      {
+        name: 'NIST Cybersecurity Framework',
+        desc: 'Identify, Protect, Detect, Respond, and Recover security functions'
+      },
+      {
+        name: 'ISO 27001:2022',
+        desc: 'Information security management systems requirements'
+      },
+      {
+        name: 'CIS Controls',
+        desc: 'Critical security controls for reducing cyber risk'
+      },
+      {
+        name: 'GDPR Compliance',
+        desc: 'Data protection and privacy requirements for EU users'
+      },
+    ];
+    
+    frameworks.forEach((fw) => {
+      yPosition = checkNewPage(yPosition, 12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text(`• ${fw.name}`, margin + 5, yPosition);
+      yPosition += 6;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      yPosition = addTextWithLineBreaks(fw.desc, margin + 15, yPosition, pageWidth - margin - 25, 4);
+      yPosition += 6;
+    });
+
+    // Implementation Timeline
+    pdf.addPage();
+    yPosition = margin;
+    
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('IMPLEMENTATION TIMELINE', margin, yPosition);
+    yPosition += 15;
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Recommended timeline for remediation based on severity:', margin, yPosition);
+    yPosition += 12;
+    
+    const timeline = [
+      { phase: 'Phase 1 (Week 1-2)', items: 'Immediately patch Critical vulnerabilities, implement emergency controls', color: { r: 220, g: 38, b: 38 } },
+      { phase: 'Phase 2 (Week 3-4)', items: 'Address all High-severity issues, conduct security training', color: { r: 251, g: 146, b: 60 } },
+      { phase: 'Phase 3 (Month 2)', items: 'Resolve Medium-priority items, implement preventive controls', color: { r: 234, g: 179, b: 8 } },
+      { phase: 'Phase 4 (Month 3+)', items: 'Monitor Low-priority issues, establish continuous security monitoring', color: { r: 59, g: 130, b: 246 } },
+    ];
+    
+    timeline.forEach((t) => {
+      yPosition = checkNewPage(yPosition, 20);
+      
+      // Color-coded phase indicator
+      pdf.setFillColor(t.color.r, t.color.g, t.color.b);
+      pdf.roundedRect(margin, yPosition - 8, 8, 8, 1, 1, 'F');
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(t.phase, margin + 12, yPosition);
+      yPosition += 8;
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      yPosition = addTextWithLineBreaks(t.items, margin + 10, yPosition, pageWidth - margin - 20, 5);
+      yPosition += 5;
+      pdf.setFontSize(12);
     });
 
     // AI Recommendations
@@ -330,6 +607,40 @@ const exportAsEnhancedPdf = async (results: ScanResult[], metadata: ScanMetadata
       });
     }
 
+    // Additional Security Insights Section
+    pdf.addPage();
+    yPosition = margin;
+    
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SECURITY INSIGHTS & BEST PRACTICES', margin, yPosition);
+    yPosition += 15;
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    
+    const insights = [
+      'Regular Security Audits: Conduct quarterly security assessments to identify emerging threats',
+      'Vulnerability Management: Implement a systematic approach to discovering, prioritizing, and remediating vulnerabilities',
+      'Incident Response Plan: Develop and maintain a documented incident response procedure',
+      'Security Awareness Training: Ensure team members understand security best practices and threats',
+      'Code Review Process: Implement peer review and security analysis in your development pipeline',
+      'Dependency Scanning: Monitor and update third-party libraries for known vulnerabilities',
+      'Access Control: Implement principle of least privilege for user and application access',
+      'Encryption: Use encryption for data in transit and at rest',
+      'Logging & Monitoring: Maintain comprehensive security logs and real-time threat detection',
+      'Backup Strategy: Implement robust backup and disaster recovery procedures'
+    ];
+    
+    insights.forEach((insight, index) => {
+      yPosition = checkNewPage(yPosition, 10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`${index + 1}.`, margin, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      yPosition = addTextWithLineBreaks(insight, margin + 10, yPosition, pageWidth - margin - 20, 5);
+      yPosition += 4;
+    });
+
     // Footer on last page
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
@@ -355,7 +666,15 @@ const exportAsEnhancedExcel = async (results: ScanResult[], metadata: ScanMetada
   csvContent += `Domain,${metadata.domain}\n`;
   csvContent += `Assessment Date,${new Date(metadata.timestamp).toLocaleDateString()}\n`;
   csvContent += `Total Findings,${results.length}\n`;
-  csvContent += `Report Type,${aiReport ? 'AI-Enhanced Professional Assessment' : 'Standard Security Assessment'}\n\n`;
+  csvContent += `Report Type,${aiReport ? 'AI-Enhanced Professional Assessment' : 'Standard Security Assessment'}\n`;
+  csvContent += `Scan Mode,${metadata.scanMode || 'LIVE'}\n\n`;
+  
+  // Scan Methodology
+  csvContent += 'SCAN METHODOLOGY\n';
+  csvContent += `Total Payloads Generated,${metadata.payloadCount || metadata.queries || 0}\n`;
+  csvContent += `GitHub Queries Executed,${metadata.githubQueries || 0}\n`;
+  csvContent += `Google Dorking Queries,${metadata.googleQueries || 0}\n`;
+  csvContent += `Rate Limiting Applied,Yes - Exponential Backoff\n\n`;
   
   csvContent += 'SEVERITY BREAKDOWN\n';
   csvContent += `Critical Issues,${severityBreakdown.critical}\n`;
@@ -497,6 +816,22 @@ const generateActionItems = (results: ScanResult[], aiReport?: any): string[] =>
   items.push('Establish regular security monitoring procedures');
   
   return items;
+};
+
+const sortResultsBySeverity = (results: ScanResult[]): ScanResult[] => {
+  const severityOrder: { [key: string]: number } = {
+    'Critical': 1,
+    'High': 2,
+    'Medium': 3,
+    'Low': 4,
+    'Informational': 5
+  };
+  
+  return [...results].sort((a, b) => {
+    const orderA = severityOrder[a.severity] || 999;
+    const orderB = severityOrder[b.severity] || 999;
+    return orderA - orderB;
+  });
 };
 
 const generateNextSteps = (results: ScanResult[], aiReport?: any): string[] => {

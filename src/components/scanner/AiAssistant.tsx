@@ -38,7 +38,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m HACRF Security Assistant, your AI-powered cybersecurity expert. I can help you understand your scan results, provide remediation advice, generate additional security payloads, and answer questions about cybersecurity best practices. How can I help you secure your domain today?',
+      content: 'Hello! I\'m HCARF Security Assistant, your AI-powered cybersecurity expert. I can help you understand your scan results, provide remediation advice, generate additional security payloads, and answer questions about cybersecurity best practices. How can I help you secure your domain today?',
       timestamp: new Date(),
     },
   ]);
@@ -184,7 +184,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
               </div>
               <div>
                 <h2 className="text-lg font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  HACRF Security Assistant
+                  HCARF Security Assistant
                 </h2>
                 <p className="text-xs text-muted-foreground">Powered by AI • Real-time Security Analysis</p>
               </div>
